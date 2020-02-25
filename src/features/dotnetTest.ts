@@ -182,8 +182,12 @@ export default class TestManager extends AbstractProvider {
 
         this._eventStream.post(new DotNetTestRunStart(testMethod));
 
-        const listener = this._server.onTestMessage(e => {
+        const messageListener = this._server.onTestMessage(e => {
             this._eventStream.post(new DotNetTestMessage(e.Message));
+        });
+
+        const completedListener = this._server.onTestCompleted(e => {
+            this._eventStream.post(new ReportDotNetTestResults([ e ]))
         });
 
         let targetFrameworkVersion = await this._recordRunAndGetFrameworkVersion(fileName, testFrameworkName);
@@ -197,7 +201,8 @@ export default class TestManager extends AbstractProvider {
             this._eventStream.post(new DotNetTestRunFailure(reason));
         }
         finally {
-            listener.dispose();
+            messageListener.dispose();
+            completedListener.dispose();
         }
     }
 
@@ -206,8 +211,12 @@ export default class TestManager extends AbstractProvider {
         //to do: try to get the class name here
         this._eventStream.post(new DotNetTestsInClassRunStart(className));
 
-        const listener = this._server.onTestMessage(e => {
+        const messageListener = this._server.onTestMessage(e => {
             this._eventStream.post(new DotNetTestMessage(e.Message));
+        });
+
+        const completedListener = this._server.onTestCompleted(e => {
+            this._eventStream.post(new ReportDotNetTestResults([ e ]))
         });
 
         let targetFrameworkVersion = await this._recordRunAndGetFrameworkVersion(fileName, testFrameworkName);
@@ -221,7 +230,8 @@ export default class TestManager extends AbstractProvider {
             this._eventStream.post(new DotNetTestRunFailure(reason));
         }
         finally {
-            listener.dispose();
+            messageListener.dispose();
+            completedListener.dispose();
         }
     }
 

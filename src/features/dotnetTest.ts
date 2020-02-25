@@ -186,10 +186,6 @@ export default class TestManager extends AbstractProvider {
             this._eventStream.post(new DotNetTestMessage(e.Message));
         });
 
-        const completedListener = this._server.onTestCompleted(e => {
-            this._eventStream.post(new ReportDotNetTestResults([ e ]))
-        });
-
         let targetFrameworkVersion = await this._recordRunAndGetFrameworkVersion(fileName, testFrameworkName);
         let runSettings = vscode.workspace.getConfiguration('omnisharp').get<string>('testRunSettings');
 
@@ -202,7 +198,6 @@ export default class TestManager extends AbstractProvider {
         }
         finally {
             messageListener.dispose();
-            completedListener.dispose();
         }
     }
 

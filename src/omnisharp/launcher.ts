@@ -273,7 +273,10 @@ async function launch(cwd: string, args: string[], launchInfo: LaunchInfo, platf
         };
     }
     else {
-        return launchNix(launchInfo.LaunchPath, cwd, args);
+        throw "Mono installation not found. Please install Mono >= 6.8, and add \n" +
+            "   \"omnisharp.useGlobalMono\": \"always\",\n" +
+            "   \"omnisharp.monoPath\": \"/Library/Frameworks/Mono.framework/Versions/6.8.0\"\n" +
+            "   to your user settings."
     }
 }
 
@@ -312,18 +315,6 @@ function launchWindows(launchPath: string, cwd: string, args: string[]): LaunchR
     return {
         process,
         command: launchPath,
-    };
-}
-
-function launchNix(launchPath: string, cwd: string, args: string[]): LaunchResult {
-    let process = spawn(launchPath, args, {
-        detached: false,
-        cwd: cwd
-    });
-
-    return {
-        process,
-        command: launchPath
     };
 }
 

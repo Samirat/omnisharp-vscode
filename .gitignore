@@ -10,6 +10,8 @@ out
 dist/
 *.razor.json
 
+!omnisharp/**/*
+
 install.*
 
 *.vsix

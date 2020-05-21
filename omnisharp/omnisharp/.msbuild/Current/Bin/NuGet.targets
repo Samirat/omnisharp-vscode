@@ -57,6 +57,8 @@ Copyright (c) .NET Foundation. All rights reserved.
     <NuGetInteractive Condition=" '$(NuGetInteractive)' == '' ">$(MSBuildInteractive)</NuGetInteractive>
     <!-- Mark that this targets file supports package download. -->
     <PackageDownloadSupported>true</PackageDownloadSupported>
+    <!-- Flag if the Central package file is enabled -->
+    <_CentralPackageVersionsEnabled Condition="'$(ManagePackageVersionsCentrally)' == 'true' AND '$(CentralPackageVersionsFileImported)' == 'true'">true</_CentralPackageVersionsEnabled>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -94,6 +96,7 @@ Copyright (c) .NET Foundation. All rights reserved.
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreProjectJsonPathTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreProjectReferencesTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestorePackageReferencesTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
+  <UsingTask TaskName="NuGet.Build.Tasks.GetCentralPackageVersionsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestorePackageDownloadsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreFrameworkReferencesTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreDotnetCliToolsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
@@ -102,6 +105,8 @@ Copyright (c) .NET Foundation. All rights reserved.
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreSettingsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.WarnForInvalidProjectsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetReferenceNearestTargetFrameworkTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
+  <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreProjectStyleTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
+  <UsingTask TaskName="NuGet.Build.Tasks.NuGetMessageTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
 
   <!--
     ============================================================
@@ -129,7 +134,8 @@ Copyright (c) .NET Foundation. All rights reserved.
       RestoreForce="$(RestoreForce)"
       HideWarningsAndErrors="$(HideWarningsAndErrors)"
       Interactive="$(NuGetInteractive)"
-      RestoreForceEvaluate="$(RestoreForceEvaluate)"/>
+      RestoreForceEvaluate="$(RestoreForceEvaluate)"
+      RestorePackagesConfig="$(RestorePackagesConfig)"/>
   </Target>
 
   <!--
@@ -167,7 +173,15 @@ Copyright (c) .NET Foundation. All rights reserved.
   -->
   <Target Name="CollectPackageReferences" Returns="@(PackageReference)" />
 
-    <!--
+  <!--
+    ============================================================
+    CollectCentralPackageVersions
+    Gathers all PackageVersion items from the central package versions file.
+    ============================================================
+  -->
+  <Target Name="CollectCentralPackageVersions" Returns="@(PackageVersion)" />
+  
+  <!--
     ============================================================
     CollectPackageDownloads
     Gathers all PackageDownload items from the project.
@@ -177,7 +191,7 @@ Copyright (c) .NET Foundation. All rights reserved.
   -->
   <Target Name="CollectPackageDownloads" Returns="@(PackageDownload)" />
 
-   <!--
+  <!--
     ============================================================
     CollectFrameworkReferences
     ============================================================
@@ -429,19 +443,22 @@ Copyright (c) .NET Foundation. All rights reserved.
   <Target Name="_GetRestoreProjectStyle"
     DependsOnTargets="_GetProjectJsonPath;CollectPackageReferences"
     Returns="$(RestoreProjectStyle);$(PackageReferenceCompatibleProjectStyle)">
-    <!-- This may be overridden by setting RestoreProjectStyle in the project. -->
     <PropertyGroup>
-      <!-- If any PackageReferences exist treat it as PackageReference. This has priority over project.json. -->
-      <RestoreProjectStyle Condition=" '$(RestoreProjectStyle)' == '' AND @(PackageReference) != '' ">PackageReference</RestoreProjectStyle>
-      <!-- If this is not a PackageReference project check if project.json or projectName.project.json exists. -->
-      <RestoreProjectStyle Condition=" '$(RestoreProjectStyle)' == '' AND '$(_CurrentProjectJsonPath)' != '' ">ProjectJson</RestoreProjectStyle>
-      <!-- If this is not a PackageReference or ProjectJson project check if packages.config or packages.ProjectName.config exists -->
-      <RestoreProjectStyle Condition=" '$(RestoreProjectStyle)' == '' AND (Exists('$(MSBuildProjectDirectory)\packages.config') Or Exists('$(MSBuildProjectDirectory)\packages.$(MSBuildProjectName).config'))">PackagesConfig</RestoreProjectStyle>
-      <!-- This project is either a packages.config project or one that does not use NuGet at all. -->
-      <RestoreProjectStyle Condition=" '$(RestoreProjectStyle)' == '' ">Unknown</RestoreProjectStyle>
+      <_HasPackageReferenceItems Condition="@(PackageReference->Count()) > 0">true</_HasPackageReferenceItems>
     </PropertyGroup>
+
+    <GetRestoreProjectStyleTask
+      HasPackageReferenceItems="$(_HasPackageReferenceItems)"
+      MSBuildProjectDirectory="$(MSBuildProjectDirectory)"
+      MSBuildProjectName="$(MSBuildProjectName)"
+      ProjectJsonPath="$(_CurrentProjectJsonPath)"
+      RestoreProjectStyle="$(RestoreProjectStyle)">
+      <Output TaskParameter="ProjectStyle" PropertyName="RestoreProjectStyle" />
+      <Output TaskParameter="IsPackageReferenceCompatibleProjectStyle" PropertyName="PackageReferenceCompatibleProjectStyle" />
+    </GetRestoreProjectStyleTask>
+
     <PropertyGroup>
-      <PackageReferenceCompatibleProjectStyle Condition="  '$(RestoreProjectStyle)' == 'PackageReference' OR '$(RestoreProjectStyle)' == 'DotnetToolReference' ">true</PackageReferenceCompatibleProjectStyle>
+      <_HasPackageReferenceItems />
     </PropertyGroup>
   </Target>
 
@@ -457,13 +474,13 @@ Copyright (c) .NET Foundation. All rights reserved.
   <Target Name="EnableIntermediateOutputPathMismatchWarning" DependsOnTargets="_GetRestoreProjectStyle"
           BeforeTargets="_CheckForInvalidConfigurationAndPlatform"
           Condition="'$(RestoreProjectStyle)' == 'PackageReference'">
-    
+
     <PropertyGroup Condition="'$(EnableBaseIntermediateOutputPathMismatchWarning)' == ''">
       <EnableBaseIntermediateOutputPathMismatchWarning>true</EnableBaseIntermediateOutputPathMismatchWarning>
     </PropertyGroup>
-  
+
   </Target>
-  
+
   <!--
     ============================================================
     _GetRestoreTargetFrameworksOutput
@@ -520,23 +537,29 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="_GetRestoreSettings"
-          Condition=" '$(RestoreProjectStyle)' == 'PackageReference' OR '$(RestoreProjectStyle)' == 'ProjectJson' OR '$(RestoreProjectStyle)' == 'DotnetToolReference' "
+          Condition=" '$(RestoreProjectStyle)' == 'PackageReference' OR '$(RestoreProjectStyle)' == 'ProjectJson' OR '$(RestoreProjectStyle)' == 'DotnetToolReference' OR '$(RestoreProjectStyle)' == 'PackagesConfig'"
           DependsOnTargets="_GetRestoreSettingsOverrides;_GetRestoreSettingsCurrentProject;_GetRestoreSettingsAllFrameworks"
-          Returns="$(_OutputSources);$(_OutputPackagesPath);$(_OutputFallbackFolders);$(_OutputConfigFilePaths)">
+          Returns="$(_OutputSources);$(_OutputPackagesPath);$(_OutputRepositoryPath);$(_OutputFallbackFolders);$(_OutputConfigFilePaths)">
 
+    <PropertyGroup Condition=" '$(RestoreSolutionDirectory)' == '' AND '$(RestoreProjectStyle)' == 'PackagesConfig' AND '$(SolutionDir)' != '*Undefined*'">
+      <RestoreSolutionDirectory>$(SolutionDir)</RestoreSolutionDirectory>
+    </PropertyGroup>
     <!-- For transitive project styles, we rely on evaluating all the settings and including them in the dg spec to faciliate no-op restore-->
     <GetRestoreSettingsTask
      ProjectUniqueName="$(MSBuildProjectFullPath)"
      RestoreSources="$(RestoreSources)"
      RestorePackagesPath="$(RestorePackagesPath)"
+     RestoreRepositoryPath="$(RestoreRepositoryPath)"
      RestoreFallbackFolders="$(RestoreFallbackFolders)"
      RestoreConfigFile="$(RestoreConfigFile)"
      RestoreRootConfigDirectory="$(RestoreRootConfigDirectory)"
      RestoreSolutionDirectory="$(RestoreSolutionDirectory)"
      RestoreSettingsPerFramework="@(_RestoreSettingsPerFramework)"
      RestorePackagesPathOverride="$(_RestorePackagesPathOverride)"
+     RestoreRepositoryPathOverride="$(_RestoreRepositoryPathOverride)"
      RestoreSourcesOverride="$(_RestoreSourcesOverride)"
      RestoreFallbackFoldersOverride="$(_RestoreFallbackFoldersOverride)"
+     RestoreProjectStyle="$(RestoreProjectStyle)"
      MSBuildStartupDirectory="$(MSBuildStartupDirectory)">
       <Output
         TaskParameter="OutputSources"
@@ -544,6 +567,9 @@ Copyright (c) .NET Foundation. All rights reserved.
       <Output
         TaskParameter="OutputPackagesPath"
         PropertyName="_OutputPackagesPath" />
+      <Output
+        TaskParameter="OutputRepositoryPath"
+        PropertyName="_OutputRepositoryPath" />
       <Output
         TaskParameter="OutputFallbackFolders"
         PropertyName="_OutputFallbackFolders" />
@@ -690,6 +716,7 @@ Copyright (c) .NET Foundation. All rights reserved.
         <RestorePackagesWithLockFile>$(RestorePackagesWithLockFile)</RestorePackagesWithLockFile>
         <NuGetLockFilePath>$(NuGetLockFilePath)</NuGetLockFilePath>
         <RestoreLockedMode>$(RestoreLockedMode)</RestoreLockedMode>
+        <_CentralPackageVersionsEnabled>$(_CentralPackageVersionsEnabled)</_CentralPackageVersionsEnabled>
       </_RestoreGraphEntry>
     </ItemGroup>
 
@@ -724,6 +751,11 @@ Copyright (c) .NET Foundation. All rights reserved.
         <RestorePackagesWithLockFile>$(RestorePackagesWithLockFile)</RestorePackagesWithLockFile>
         <NuGetLockFilePath>$(NuGetLockFilePath)</NuGetLockFilePath>
         <RestoreLockedMode>$(RestoreLockedMode)</RestoreLockedMode>
+        <Sources>$(_OutputSources)</Sources>
+        <SolutionDir>$(SolutionDir)</SolutionDir>
+        <RepositoryPath>$(_OutputRepositoryPath)</RepositoryPath>
+        <ConfigFilePaths>$(_OutputConfigFilePaths)</ConfigFilePaths>
+        <PackagesPath>$(_OutputPackagesPath)</PackagesPath>
       </_RestoreGraphEntry>
     </ItemGroup>
 
@@ -813,7 +845,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="_GenerateProjectRestoreGraphPerFramework"
-    DependsOnTargets="_GetRestoreProjectStyle;CollectPackageReferences;CollectPackageDownloads;CollectFrameworkReferences"
+    DependsOnTargets="_GetRestoreProjectStyle;CollectPackageReferences;CollectPackageDownloads;CollectFrameworkReferences;CollectCentralPackageVersions"
     Returns="@(_RestoreGraphEntry)">
 
     <!-- Write out project references -->
@@ -840,6 +872,19 @@ Copyright (c) .NET Foundation. All rights reserved.
         TaskParameter="RestoreGraphItems"
         ItemName="_RestoreGraphEntry" />
     </GetRestorePackageReferencesTask>
+
+    <!-- Write out central package versions -->
+    <GetCentralPackageVersionsTask
+      Condition=" '$(PackageReferenceCompatibleProjectStyle)' == 'true' AND '$(_CentralPackageVersionsEnabled)' == 'true' "
+      ProjectUniqueName="$(MSBuildProjectFullPath)"
+      CentralPackageVersions="@(PackageVersion)"
+      TargetFrameworks="$(TargetFramework)"
+      >
+
+      <Output
+        TaskParameter="RestoreGraphItems"
+        ItemName="_RestoreGraphEntry" />
+    </GetCentralPackageVersionsTask>
 
     <!-- Write out package downloads -->
     <GetRestorePackageDownloadsTask
@@ -1050,6 +1095,8 @@ Copyright (c) .NET Foundation. All rights reserved.
           DependsOnTargets="_FilterRestoreGraphProjectInputItems"
           Returns="@(_RestoreProjectPathItems)">
 
+    <NuGetMessageTask Name="DeterminingProjectsToRestore" Importance="High" />
+
     <!-- Walk projects -->
     <!-- With SkipNonexistentTargets -->
     <MsBuild
@@ -1127,7 +1174,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="_GetRestoreSettingsOverrides"
-          Returns="$(_RestorePackagesPathOverride);$(_RestoreSourcesOverride);$(_RestoreFallbackFoldersOverride)">
+          Returns="$(_RestorePackagesPathOverride);$(_RestoreRepositoryPathOverride);$(_RestoreSourcesOverride);$(_RestoreFallbackFoldersOverride)">
 
     <!-- RestorePackagesPathOverride -->
     <MsBuild
@@ -1139,6 +1186,18 @@ Copyright (c) .NET Foundation. All rights reserved.
       <Output
           TaskParameter="TargetOutputs"
           PropertyName="_RestorePackagesPathOverride" />
+    </MsBuild>
+
+    <!-- RestoreRepositoryPathOverride -->
+    <MsBuild
+      BuildInParallel="$(RestoreBuildInParallel)"
+      Condition=" '$(RestoreRepositoryPathOverride)' != '' "
+      Projects="$(MSBuildThisFileFullPath)"
+      Targets="_GetRestoreRepositoryPathOverride">
+
+      <Output
+        TaskParameter="TargetOutputs"
+        PropertyName="_RestoreRepositoryPathOverride" />
     </MsBuild>
 
     <!-- RestoreSourcesOverride -->
@@ -1180,6 +1239,18 @@ Copyright (c) .NET Foundation. All rights reserved.
 
   <!--
     ============================================================
+    _GetRestoreRepositoryPathOverride
+    ============================================================
+  -->
+  <Target Name="_GetRestoreRepositoryPathOverride"
+          Returns="$(_RestoreRepositoryPathOverride)">
+    <PropertyGroup>
+      <_RestorePackagesPathOverride>$(RestoreRepositoryPath)</_RestorePackagesPathOverride>
+    </PropertyGroup>
+  </Target>
+
+  <!--
+    ============================================================
     _GetRestoreSourcesOverride
     ============================================================
   -->
@@ -1216,4 +1287,15 @@ Copyright (c) .NET Foundation. All rights reserved.
     </ItemGroup>
   </Target>
 
+  <!--
+    ============================================================
+    Import NuGet.RestoreEx.targets if the MSBuild property 'RestoreEnableStaticGraph'
+    is 'true'.  This file overrides the Restore target to use MSBuild Static Graph
+    to load and evaluate projects which is much faster.
+
+    This feature is not supported for NuGet.exe scenarios and NuGet.RestoreEx.targets
+    won't exist in that case.
+    ============================================================
+  -->
+  <Import Project="NuGet.RestoreEx.targets" Condition="'$(RestoreUseStaticGraphEvaluation)' == 'true' And Exists('NuGet.RestoreEx.targets')" />
 </Project>

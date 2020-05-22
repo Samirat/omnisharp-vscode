@@ -276,7 +276,7 @@ async function launch(cwd: string, args: string[], launchInfo: LaunchInfo, platf
         throw "Mono installation not found. Please install Mono >= 6.8, and add \n" +
             "   \"omnisharp.useGlobalMono\": \"always\",\n" +
             "   \"omnisharp.monoPath\": \"/Library/Frameworks/Mono.framework/Versions/6.8.0\"\n" +
-            "   to your user settings."
+            "   to your user settings.";
     }
 }
 

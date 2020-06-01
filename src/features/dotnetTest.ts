@@ -228,7 +228,7 @@ export default class TestManager extends AbstractProvider {
         });
 
         const completedListener = this._server.onTestCompleted(e => {
-            this._eventStream.post(new ReportDotNetTestResults([ e ]))
+            this._eventStream.post(new ReportDotNetTestResults([ e ]));
         });
 
         let targetFrameworkVersion = await this._recordRunAndGetFrameworkVersion(fileName, testFrameworkName);

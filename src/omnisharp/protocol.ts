@@ -28,7 +28,10 @@ export module Requests {
     export const TypeLookup = '/typelookup';
     export const UpdateBuffer = '/updatebuffer';
     export const Metadata = '/metadata';
+    export const RunFixAll = '/runfixall';
+    export const GetFixAll = '/getfixall';
     export const ReAnalyze = '/reanalyze';
+    export const QuickInfo = '/quickinfo';
 }
 
 export namespace WireProtocol {
@@ -253,6 +256,20 @@ export interface GetCodeActionsResponse {
     CodeActions: string[];
 }
 
+export interface RunFixAllActionResponse {
+    Text: string;
+    Changes: ModifiedFileResponse[];
+}
+
+export interface FixAllItem {
+    Id: string;
+    Message: string;
+}
+
+export interface GetFixAllResponse {
+    Items: FixAllItem[];
+}
+
 export interface SyntaxFeature {
     Name: string;
     Data: string;
@@ -448,9 +465,13 @@ export interface UnresolvedDependenciesMessage {
 
 export interface ProjectConfigurationMessage {
     ProjectId: string;
+    SessionId: string;
+    OutputKind: number;
+    ProjectCapabilities: string[];
     TargetFrameworks: string[];
     References: string[];
     FileExtensions: string[];
+    FileCounts: number[];
 }
 
 export interface PackageDependency {
@@ -465,7 +486,33 @@ export interface FilesChangedRequest extends Request {
 export enum FileChangeType {
     Change = "Change",
     Create = "Create",
-    Delete = "Delete"
+    Delete = "Delete",
+    DirectoryDelete = "DirectoryDelete"
+}
+
+export enum FixAllScope {
+    Document = "Document",
+    Project = "Project",
+    Solution = "Solution"
+}
+
+export interface GetFixAllRequest extends FileBasedRequest {
+    Scope: FixAllScope;
+    FixAllFilter?: FixAllItem[];
+}
+
+export interface RunFixAllRequest extends FileBasedRequest {
+    Scope: FixAllScope;
+    FixAllFilter?: FixAllItem[];
+    WantsTextChanges: boolean;
+    WantsAllCodeActionOperations: boolean;
+}
+  
+export interface QuickInfoRequest extends Request {
+}
+
+export interface QuickInfoResponse {
+    Markdown?: string;
 }
 
 export namespace V2 {

@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as protocol from './protocol';
 import * as vscode from 'vscode';
 import { MSBuildProject } from './protocol';
+import { CancellationToken } from 'vscode-languageserver-protocol';
 
 export async function autoComplete(server: OmniSharpServer, request: protocol.AutoCompleteRequest, token: vscode.CancellationToken) {
     return server.makeRequest<protocol.AutoCompleteResponse[]>(protocol.Requests.AutoComplete, request, token);
@@ -40,6 +41,14 @@ export async function findImplementations(server: OmniSharpServer, request: prot
 
 export async function findSymbols(server: OmniSharpServer, request: protocol.FindSymbolsRequest, token: vscode.CancellationToken) {
     return server.makeRequest<protocol.FindSymbolsResponse>(protocol.Requests.FindSymbols, request, token);
+}
+
+export async function runFixAll(server: OmniSharpServer, request: protocol.RunFixAllRequest): Promise<protocol.RunFixAllActionResponse> {
+    return server.makeRequest<protocol.RunFixAllActionResponse>(protocol.Requests.RunFixAll, request);
+}
+
+export async function getFixAll(server: OmniSharpServer, request: protocol.GetFixAllRequest): Promise<protocol.GetFixAllResponse> {
+    return server.makeRequest<protocol.GetFixAllResponse>(protocol.Requests.GetFixAll, request);
 }
 
 export async function findUsages(server: OmniSharpServer, request: protocol.FindUsagesRequest, token: vscode.CancellationToken) {
@@ -77,10 +86,11 @@ export async function requestWorkspaceInformation(server: OmniSharpServer) {
         let blazorWebAssemblyProjectFound = false;
 
         for (const project of response.MsBuild.Projects) {
+            project.IsWebProject = isWebProject(project);
+
             const isProjectBlazorWebAssemblyProject = await isBlazorWebAssemblyProject(project);
             const isProjectBlazorWebAssemblyHosted = isBlazorWebAssemblyHosted(project, isProjectBlazorWebAssemblyProject);
 
-            project.IsWebProject = isWebProject(project);
             project.IsBlazorWebAssemblyHosted = blazorDetectionEnabled && isProjectBlazorWebAssemblyHosted;
             project.IsBlazorWebAssemblyStandalone = blazorDetectionEnabled && isProjectBlazorWebAssemblyProject && !project.IsBlazorWebAssemblyHosted;
 
@@ -165,6 +175,10 @@ export async function debugTestStop(server: OmniSharpServer, request: protocol.V
 
 export async function getSemanticHighlights(server: OmniSharpServer, request: protocol.V2.SemanticHighlightRequest) {
     return server.makeRequest<protocol.V2.SemanticHighlightResponse>(protocol.V2.Requests.Highlight, request);
+}
+
+export async function getQuickInfo(server: OmniSharpServer, request: protocol.QuickInfoRequest, token: CancellationToken) {
+    return server.makeRequest<protocol.QuickInfoResponse>(protocol.Requests.QuickInfo, request, token);
 }
 
 export async function isNetCoreProject(project: protocol.MSBuildProject) {
